@@ -17,7 +17,7 @@ export default function Login() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (authService.login(email, password)) {
+    if (authService.login(email, password)) { 
       navigate('/', { replace: true });
     } else {
       setError('Invalid email or password');
