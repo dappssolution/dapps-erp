@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { fetchExpenses, addExpense, deleteExpense, fetchIncomes, addIncome, deleteIncome } from '@/store/expenseSlice';
 import { Expense, Income, PARTNERS, Partner, EXPENSE_CATEGORIES, ExpenseCategory } from '@/types';
@@ -11,15 +11,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-
-const PIE_COLORS = ['hsl(263,70%,58%)', 'hsl(270,60%,50%)', 'hsl(280,50%,60%)', 'hsl(250,60%,55%)'];
+import ExpenseCharts from '@/components/expenses/ExpenseCharts';
+import ExpenseStats from '@/components/expenses/ExpenseStats';
+import IncomeList from '@/components/expenses/IncomeList';
 
 export default function Expenses() {
   const dispatch = useAppDispatch();
   const { expenses, incomes } = useAppSelector(s => s.expense);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [incomeOpen, setIncomeOpen] = useState(false);
+  const [filterPartner, setFilterPartner] = useState<string>('all');
+  const [filterMonth, setFilterMonth] = useState<string>('all');
   const [expForm, setExpForm] = useState({ partner: PARTNERS[0] as Partner, amount: '', reason: '', category: EXPENSE_CATEGORIES[0] as ExpenseCategory, date: new Date().toISOString().split('T')[0], isCompanyExpense: true });
   const [incForm, setIncForm] = useState({ amount: '', source: '', date: new Date().toISOString().split('T')[0] });
 
@@ -34,10 +36,15 @@ export default function Expenses() {
   const totalIncome = monthIncomes.reduce((s, i) => s + i.amount, 0);
   const netProfit = totalIncome - totalExpense;
 
-  const partnerData = PARTNERS.map(p => ({
-    name: p.split(' ')[0],
-    amount: monthExpenses.filter(e => e.partner === p).reduce((s, e) => s + e.amount, 0),
-  }));
+  // Filtered expenses for the list
+  const filteredExpenses = expenses.filter(e => {
+    const partnerMatch = filterPartner === 'all' || e.partner === filterPartner;
+    const monthMatch = filterMonth === 'all' || e.date.substring(0, 7) === filterMonth;
+    return partnerMatch && monthMatch;
+  });
+
+  // Get unique months from expenses
+  const uniqueMonths = [...new Set(expenses.map(e => e.date.substring(0, 7)))].sort().reverse();
 
   const handleAddExpense = () => {
     dispatch(addExpense({ ...expForm, amount: Number(expForm.amount), id: crypto.randomUUID(), createdAt: new Date().toISOString() }));
@@ -51,20 +58,6 @@ export default function Expenses() {
     setIncForm({ amount: '', source: '', date: new Date().toISOString().split('T')[0] });
   };
 
-  const StatCard = ({ title, value, icon: Icon, type }: { title: string; value: number; icon: any; type: 'income' | 'expense' | 'profit' }) => (
-    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card p-5 glow-border">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">{title}</p>
-          <p className="text-2xl font-bold mt-1">₹{value.toLocaleString()}</p>
-        </div>
-        <div className={`p-3 rounded-xl ${type === 'income' ? 'bg-success/20 text-success' : type === 'expense' ? 'bg-destructive/20 text-destructive' : netProfit >= 0 ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'}`}>
-          <Icon className="w-5 h-5" />
-        </div>
-      </div>
-    </motion.div>
-  );
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -76,71 +69,114 @@ export default function Expenses() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Income (This Month)" value={totalIncome} icon={TrendingUp} type="income" />
-        <StatCard title="Total Expenses (This Month)" value={totalExpense} icon={TrendingDown} type="expense" />
-        <StatCard title="Net Profit (This Month)" value={netProfit} icon={DollarSign} type="profit" />
-      </div>
+      <ExpenseStats totalIncome={totalIncome} totalExpense={totalExpense} netProfit={netProfit} />
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card p-5">
-          <h3 className="font-semibold mb-4">Partner Expense Share</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={partnerData}>
-              <XAxis dataKey="name" stroke="hsl(0,0%,55%)" fontSize={12} />
-              <YAxis stroke="hsl(0,0%,55%)" fontSize={12} />
-              <Tooltip contentStyle={{ background: 'hsl(0,0%,7%)', border: '1px solid hsl(0,0%,15%)', borderRadius: '8px' }} />
-              <Bar dataKey="amount" fill="hsl(263,70%,58%)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </motion.div>
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card p-5">
-          <h3 className="font-semibold mb-4">Expense Distribution</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie data={partnerData.filter(d => d.amount > 0)} dataKey="amount" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3}>
-                {partnerData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-              </Pie>
-              <Tooltip contentStyle={{ background: 'hsl(0,0%,7%)', border: '1px solid hsl(0,0%,15%)', borderRadius: '8px' }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </motion.div>
+      <ExpenseCharts expenses={monthExpenses} />
+
+      {/* Filters */}
+      <div className="glass-card p-5">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
+          <h2 className="font-semibold text-lg">All Expenses</h2>
+          <div className="flex gap-3 flex-wrap">
+            <Select value={filterPartner} onValueChange={setFilterPartner}>
+              <SelectTrigger className="w-[160px] bg-background border-border">
+                <SelectValue placeholder="Filter partner" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Partners</SelectItem>
+                {PARTNERS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterMonth} onValueChange={setFilterMonth}>
+              <SelectTrigger className="w-[160px] bg-background border-border">
+                <SelectValue placeholder="Filter month" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Months</SelectItem>
+                {uniqueMonths.map(m => <SelectItem key={m} value={m}>{new Date(m + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="mb-3 text-sm text-muted-foreground">
+          Showing {filteredExpenses.length} expenses · Total: ₹{filteredExpenses.reduce((s, e) => s + e.amount, 0).toLocaleString()}
+        </div>
+
+        <Table>
+          <TableHeader>
+            <TableRow className="border-border">
+              <TableHead>Date</TableHead>
+              <TableHead>Partner</TableHead>
+              <TableHead>Reason</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead className="w-12"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredExpenses.sort((a, b) => b.date.localeCompare(a.date)).map(e => (
+              <TableRow key={e.id} className="border-border">
+                <TableCell>{e.date}</TableCell>
+                <TableCell>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-accent text-accent-foreground font-medium">{e.partner}</span>
+                </TableCell>
+                <TableCell>{e.reason}</TableCell>
+                <TableCell><span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">{e.category}</span></TableCell>
+                <TableCell className="font-medium text-destructive">₹{e.amount.toLocaleString()}</TableCell>
+                <TableCell><button onClick={() => dispatch(deleteExpense(e.id))} className="p-1 rounded hover:bg-destructive/20 text-destructive"><Trash2 className="w-3.5 h-3.5" /></button></TableCell>
+              </TableRow>
+            ))}
+            {filteredExpenses.length === 0 && (
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No expenses found</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
       </div>
 
-      {/* Partner Tabs */}
+      {/* Income List */}
+      <IncomeList incomes={incomes} onDelete={(id) => dispatch(deleteIncome(id))} />
+
+      {/* Partner Tabs - per partner summary */}
       <Tabs defaultValue={PARTNERS[0]} className="glass-card p-5">
+        <h2 className="font-semibold text-lg mb-3">Partner-wise Breakdown</h2>
         <TabsList className="bg-muted mb-4">
           {PARTNERS.map(p => <TabsTrigger key={p} value={p} className="text-xs sm:text-sm">{p.split(' ')[0]}</TabsTrigger>)}
         </TabsList>
-        {PARTNERS.map(p => (
-          <TabsContent key={p} value={p}>
-            <div className="mb-3 text-sm text-muted-foreground">
-              Total: ₹{expenses.filter(e => e.partner === p).reduce((s, e) => s + e.amount, 0).toLocaleString()}
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border">
-                  <TableHead>Date</TableHead><TableHead>Reason</TableHead><TableHead>Category</TableHead><TableHead>Amount</TableHead><TableHead className="w-12"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {expenses.filter(e => e.partner === p).sort((a, b) => b.date.localeCompare(a.date)).map(e => (
-                  <TableRow key={e.id} className="border-border">
-                    <TableCell>{e.date}</TableCell>
-                    <TableCell>{e.reason}</TableCell>
-                    <TableCell><span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">{e.category}</span></TableCell>
-                    <TableCell className="font-medium">₹{e.amount.toLocaleString()}</TableCell>
-                    <TableCell><button onClick={() => dispatch(deleteExpense(e.id))} className="p-1 rounded hover:bg-destructive/20 text-destructive"><Trash2 className="w-3.5 h-3.5" /></button></TableCell>
+        {PARTNERS.map(p => {
+          const partnerExpenses = expenses.filter(e => e.partner === p);
+          const partnerTotal = partnerExpenses.reduce((s, e) => s + e.amount, 0);
+          return (
+            <TabsContent key={p} value={p}>
+              <div className="mb-3 flex flex-wrap gap-4 text-sm">
+                <span className="text-muted-foreground">Total Expenses: <strong className="text-foreground">₹{partnerTotal.toLocaleString()}</strong></span>
+                <span className="text-muted-foreground">Entries: <strong className="text-foreground">{partnerExpenses.length}</strong></span>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border">
+                    <TableHead>Date</TableHead><TableHead>Reason</TableHead><TableHead>Category</TableHead><TableHead>Amount</TableHead><TableHead className="w-12"></TableHead>
                   </TableRow>
-                ))}
-                {expenses.filter(e => e.partner === p).length === 0 && (
-                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No expenses</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TabsContent>
-        ))}
+                </TableHeader>
+                <TableBody>
+                  {partnerExpenses.sort((a, b) => b.date.localeCompare(a.date)).map(e => (
+                    <TableRow key={e.id} className="border-border">
+                      <TableCell>{e.date}</TableCell>
+                      <TableCell>{e.reason}</TableCell>
+                      <TableCell><span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary">{e.category}</span></TableCell>
+                      <TableCell className="font-medium">₹{e.amount.toLocaleString()}</TableCell>
+                      <TableCell><button onClick={() => dispatch(deleteExpense(e.id))} className="p-1 rounded hover:bg-destructive/20 text-destructive"><Trash2 className="w-3.5 h-3.5" /></button></TableCell>
+                    </TableRow>
+                  ))}
+                  {partnerExpenses.length === 0 && (
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No expenses for {p}</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TabsContent>
+          );
+        })}
       </Tabs>
 
       {/* Add Expense Dialog */}

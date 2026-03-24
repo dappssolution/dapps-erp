@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { fetchBusinessNumbers } from '@/store/businessSlice';
@@ -6,8 +6,12 @@ import { fetchExpenses, fetchIncomes } from '@/store/expenseSlice';
 import { fetchLeaves } from '@/store/leaveSlice';
 import { PARTNERS } from '@/types';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Users, Wallet, CalendarDays, Plus, TrendingUp, TrendingDown, DollarSign, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 export default function Dashboard() {
   const dispatch = useAppDispatch();
@@ -16,6 +20,10 @@ export default function Dashboard() {
   const { expenses, incomes } = useAppSelector(s => s.expense);
   const { records: leaves } = useAppSelector(s => s.leave);
 
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState<string>(String(now.getMonth()));
+  const [selectedYear, setSelectedYear] = useState<string>(String(now.getFullYear()));
+
   useEffect(() => {
     dispatch(fetchBusinessNumbers());
     dispatch(fetchExpenses());
@@ -23,25 +31,46 @@ export default function Dashboard() {
     dispatch(fetchLeaves());
   }, [dispatch]);
 
-  const now = new Date();
-  const thisMonth = (d: string) => { const dt = new Date(d); return dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear(); };
+  const month = parseInt(selectedMonth);
+  const year = parseInt(selectedYear);
+
+  const inPeriod = (d: string) => {
+    const dt = new Date(d);
+    return dt.getMonth() === month && dt.getFullYear() === year;
+  };
+
   const today = now.toISOString().split('T')[0];
 
-  const monthBusiness = businesses.filter(b => thisMonth(b.createdAt));
-  const monthExpenses = expenses.filter(e => thisMonth(e.date));
-  const monthIncomes = incomes.filter(i => thisMonth(i.date));
-  const totalExpense = monthExpenses.reduce((s, e) => s + e.amount, 0);
-  const totalIncome = monthIncomes.reduce((s, i) => s + i.amount, 0);
+  const periodBusiness = businesses.filter(b => inPeriod(b.createdAt));
+  const periodExpenses = expenses.filter(e => inPeriod(e.date));
+  const periodIncomes = incomes.filter(i => inPeriod(i.date));
+  const totalExpense = periodExpenses.reduce((s, e) => s + e.amount, 0);
+  const totalIncome = periodIncomes.reduce((s, i) => s + i.amount, 0);
   const todayLeaves = leaves.filter(l => l.date === today);
 
   const recentBusiness = [...businesses].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
   const recentExpenses = [...expenses].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
 
+  // Monthly growth data for the selected year
+  const monthlyGrowth = Array.from({ length: 12 }, (_, i) => {
+    const mExpenses = expenses.filter(e => { const dt = new Date(e.date); return dt.getMonth() === i && dt.getFullYear() === year; });
+    const mIncomes = incomes.filter(inc => { const dt = new Date(inc.date); return dt.getMonth() === i && dt.getFullYear() === year; });
+    const exp = mExpenses.reduce((s, e) => s + e.amount, 0);
+    const inc = mIncomes.reduce((s, item) => s + item.amount, 0);
+    return { month: MONTHS[i].substring(0, 3), income: inc, expense: exp, profit: inc - exp };
+  });
+
+  // Available years from data
+  const allDates = [...expenses.map(e => e.date), ...incomes.map(i => i.date)];
+  const yearsSet = new Set(allDates.map(d => new Date(d).getFullYear()));
+  yearsSet.add(now.getFullYear());
+  const availableYears = [...yearsSet].sort().reverse();
+
   const stats = [
-    { label: 'Total Contacts', value: businesses.length, sub: `${monthBusiness.length} this month`, icon: Users, color: 'text-primary' },
-    { label: 'Total Income', value: `₹${totalIncome.toLocaleString()}`, sub: 'This month', icon: TrendingUp, color: 'text-success' },
-    { label: 'Total Expenses', value: `₹${totalExpense.toLocaleString()}`, sub: 'This month', icon: TrendingDown, color: 'text-destructive' },
-    { label: 'Net Profit', value: `₹${(totalIncome - totalExpense).toLocaleString()}`, sub: 'This month', icon: DollarSign, color: totalIncome - totalExpense >= 0 ? 'text-success' : 'text-destructive' },
+    { label: 'Total Contacts', value: businesses.length, sub: `${periodBusiness.length} this period`, icon: Users, color: 'text-primary' },
+    { label: 'Total Income', value: `₹${totalIncome.toLocaleString()}`, sub: `${MONTHS[month]} ${year}`, icon: TrendingUp, color: 'text-success' },
+    { label: 'Total Expenses', value: `₹${totalExpense.toLocaleString()}`, sub: `${MONTHS[month]} ${year}`, icon: TrendingDown, color: 'text-destructive' },
+    { label: 'Net Profit', value: `₹${(totalIncome - totalExpense).toLocaleString()}`, sub: `${MONTHS[month]} ${year}`, icon: DollarSign, color: totalIncome - totalExpense >= 0 ? 'text-success' : 'text-destructive' },
   ];
 
   return (
@@ -56,6 +85,26 @@ export default function Dashboard() {
           <Button size="sm" variant="outline" onClick={() => navigate('/expenses')}><Plus className="w-4 h-4 mr-1" />Expense</Button>
           <Button size="sm" variant="outline" onClick={() => navigate('/leave')}><Plus className="w-4 h-4 mr-1" />Leave</Button>
         </div>
+      </div>
+
+      {/* Month/Year Filter */}
+      <div className="flex gap-3 flex-wrap">
+        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+          <SelectTrigger className="w-[150px] bg-background border-border">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {MONTHS.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={selectedYear} onValueChange={setSelectedYear}>
+          <SelectTrigger className="w-[120px] bg-background border-border">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {availableYears.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Stats */}
@@ -75,6 +124,23 @@ export default function Dashboard() {
           </motion.div>
         ))}
       </div>
+
+      {/* Profit/Loss Growth Chart */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="glass-card p-5">
+        <h2 className="font-semibold mb-4">Monthly Profit & Loss — {year}</h2>
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={monthlyGrowth}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+            <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }} />
+            <Legend />
+            <Line type="monotone" dataKey="income" stroke="hsl(142,71%,45%)" strokeWidth={2} name="Income" dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="expense" stroke="hsl(0,84%,60%)" strokeWidth={2} name="Expense" dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="profit" stroke="hsl(var(--primary))" strokeWidth={2} name="Profit/Loss" dot={{ r: 3 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </motion.div>
 
       {/* Leave Summary */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="glass-card p-5">
