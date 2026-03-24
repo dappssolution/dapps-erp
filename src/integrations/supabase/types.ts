@@ -14,7 +14,144 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      business_numbers: {
+        Row: {
+          agent_name: string
+          business_name: string
+          created_at: string
+          description: string
+          id: string
+          location: string
+          number: string
+          number2: string
+          requirements: string[]
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_name?: string
+          business_name?: string
+          created_at?: string
+          description?: string
+          id?: string
+          location?: string
+          number?: string
+          number2?: string
+          requirements?: string[]
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_name?: string
+          business_name?: string
+          created_at?: string
+          description?: string
+          id?: string
+          location?: string
+          number?: string
+          number2?: string
+          requirements?: string[]
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      expenses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          date: string
+          id: string
+          is_company_expense: boolean
+          partner: string
+          reason: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          category?: string
+          created_at?: string
+          date?: string
+          id?: string
+          is_company_expense?: boolean
+          partner: string
+          reason?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          date?: string
+          id?: string
+          is_company_expense?: boolean
+          partner?: string
+          reason?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      incomes: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          id: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          source?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      leaves: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          leave_type: string
+          partner: string
+          reason: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          id?: string
+          leave_type?: string
+          partner: string
+          reason?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          leave_type?: string
+          partner?: string
+          reason?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
