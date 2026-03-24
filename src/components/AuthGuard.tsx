@@ -1,32 +1,29 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authService } from '@/services/auth';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
-
-  const checkAuth = useCallback(() => {
-    if (!authService.isAuthenticated()) {
-      authService.logout();
-      navigate('/login', { replace: true });
-    }
-  }, [navigate]);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    checkAuth();
-    // Check every 60 seconds for session expiry
-    const interval = setInterval(checkAuth, 60_000);
-    // Also set a timeout for exact expiry
-    const remaining = authService.getRemainingMs();
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    if (remaining > 0) {
-      timeout = setTimeout(checkAuth, remaining);
-    }
-    return () => {
-      clearInterval(interval);
-      if (timeout) clearTimeout(timeout);
-    };
-  }, [checkAuth]);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        navigate('/login', { replace: true });
+      }
+      setReady(true);
+    });
 
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        navigate('/login', { replace: true });
+      }
+      setReady(true);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  if (!ready) return null;
   return <>{children}</>;
 }
